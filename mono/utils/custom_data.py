@@ -27,8 +27,17 @@ def load_from_annos(anno_path):
         datas.append(data_i)
     return datas
 
-def load_data(path: str):
-    rgbs = glob.glob(path + '/*.jpg') + glob.glob(path + '/*.png')
-    #intrinsic =  [835.8179931640625, 835.8179931640625, 961.5419921875, 566.8090209960938] #[721.53769, 721.53769, 609.5593, 172.854]
-    data = [{'rgb': i, 'depth': None, 'intrinsic': None, 'filename': os.path.basename(i), 'folder': i.split('/')[-3]} for i in rgbs]
+def load_data(txt_path: str, test_data_path: str):
+
+
+    with open(txt_path, 'r') as f:
+        filelist = f.read().splitlines()
+    
+    rgb_filelist = [os.path.join(test_data_path, line.split()[0]) for line in filelist]
+    depth_filelist = [os.path.join(test_data_path, line.split()[1]) for line in filelist]
+    print(f"rgb_filelist: {rgb_filelist[0]}")
+    
+    # rgbs = glob.glob(path + '/*.jpg') + glob.glob(path + '/*.png')
+    intrinsic =  [813.6196057549352, 813.7790107465929, 916.8001833432365, 641.1931876301182] #[721.53769, 721.53769, 609.5593, 172.854]
+    data = [{'rgb': rgb, 'depth': depth, 'depth_scale': 1000.0, 'intrinsic': intrinsic, 'filename': os.path.basename(rgb), 'folder': rgb.split('/')[-3]} for (rgb, depth) in zip(rgb_filelist, depth_filelist)]
     return data

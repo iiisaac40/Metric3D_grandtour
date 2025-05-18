@@ -1,3 +1,30 @@
+# Metric3D eval for GrandTour Project
+
+## To run eval
+### 1. set up the environment
+```bash
+cd /home/grand_tour_depth_benchmark/evaluation/Metric3D_grandtour
+pip install -r requirements_v2.txt
+pip install numpy==1.26
+pip install opencv-python==4.9.0.80
+```
+
+### eval script
+```bash
+python mono/tools/test_scale_cano.py '/home/grand_tour_depth_benchmark/evaluation/Metric3D_grandtour/mono/configs/HourglassDecoder/vit.raft5.large.py' --load-from weight/vitl_ckpt.pth --test_data_path {path/to/GrandTour} --dataset_txt_path {path/to/GrandTour/txt_files/test_25_files.txt} --launcher None --save_csv_file {path/to/save/metric/test_LEVEL.csv}
+```
+
+### **Note**: If facing the CUDA bfloat16 problem
+This error occurs because the current GPU you are using is old. bfloat16 only supports in newer GPU. To fix this error, check this [line](mono/model/decode_heads/RAFTDepthNormalDPTDecoder5.py#L219) and change it to `torch.float32`.
+
+```bash
+# before
+with torch.autocast(device_type='cuda', dtype=torch.bfloat16, enabled=False):
+
+# after
+with torch.autocast(device_type='cuda', dtype=torch.float32, enabled=False):
+```
+
 # 🚀 Metric3D Project 🚀
 
 **Official PyTorch implementation of Metric3Dv1 and Metric3Dv2:**   

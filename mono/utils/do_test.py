@@ -10,6 +10,7 @@ from tqdm import tqdm
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
+import csv
 
 from mono.utils.unproj_pcd import reconstruct_pcd, save_point_cloud
 
@@ -108,14 +109,20 @@ def resize_for_input(image, output_shape, intrinsic, canonical_shape, to_canonic
 
     # resize
     image = cv2.resize(image, dsize=(reshape_w, reshape_h), interpolation=cv2.INTER_LINEAR)
+
+    image = np.array(image)
+    # Ensure it's contiguous
+    image = np.ascontiguousarray(image)
+
+    image = image.astype(np.float32)
     # padding
     image = cv2.copyMakeBorder(
-        image, 
-        pad_h_half, 
-        pad_h - pad_h_half, 
-        pad_w_half, 
-        pad_w - pad_w_half, 
-        cv2.BORDER_CONSTANT, 
+        src=image, 
+        top=pad_h_half, 
+        bottom=pad_h - pad_h_half, 
+        left=pad_w_half, 
+        right=pad_w - pad_w_half, 
+        borderType=cv2.BORDER_CONSTANT, 
         value=padding)
     
     # Resize, adjust principle point
@@ -221,9 +228,9 @@ def do_scalecano_test_with_custom_data(
     os.makedirs(save_pcd_dir, exist_ok=True)
 
     normalize_scale = cfg.data_basic.depth_range[1]
-    dam = MetricAverageMeter(['abs_rel', 'rmse', 'silog', 'delta1', 'delta2', 'delta3'])
-    dam_median = MetricAverageMeter(['abs_rel', 'rmse', 'silog', 'delta1', 'delta2', 'delta3'])
-    dam_global = MetricAverageMeter(['abs_rel', 'rmse', 'silog', 'delta1', 'delta2', 'delta3'])
+    dam = MetricAverageMeter(['abs_rel', 'rmse', 'silog', 'delta1', 'delta2', 'delta3', 'log10', 'rmse_log', 'sq_rel'])
+    dam_median = MetricAverageMeter(['abs_rel', 'rmse', 'silog', 'delta1', 'delta2', 'delta3', 'log10', 'rmse_log', 'sq_rel'])
+    dam_global = MetricAverageMeter(['abs_rel', 'rmse', 'silog', 'delta1', 'delta2', 'delta3', 'log10', 'rmse_log', 'sq_rel'])
     
     # Process data in batches
     for i in tqdm(range(0, len(test_data), bs)):
@@ -236,7 +243,7 @@ def do_scalecano_test_with_custom_data(
             rgb_origins.append(rgb_origin)
             gt_depth = None
             if an['depth'] is not None:
-                gt_depth = cv2.imread(an['depth'], -1)
+                gt_depth = cv2.imread(an['depth'], cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
                 gt_depth_scale = an['depth_scale']
                 gt_depth = gt_depth / gt_depth_scale
             gt_depths.append(gt_depth)
@@ -286,9 +293,19 @@ def do_scalecano_test_with_custom_data(
             )
 
     #if gt_depth_flag:
-    if False:
+    if True:
         eval_error = dam.get_metrics()
         print('w/o match :', eval_error)
+
+        csv_file = cfg.save_csv_file
+        with open(csv_file, mode='a', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=eval_error.keys())
+            
+            if f.tell() == 0:
+                writer.writeheader()
+            
+            writer.writerow(eval_error)
+
 
         eval_error_median = dam_median.get_metrics()
         print('median match :', eval_error_median)
@@ -304,7 +321,9 @@ def postprocess_per_image(i, pred_depth, gt_depth, intrinsic, rgb_origin, normal
     pred_depth = pred_depth.squeeze()
     pred_depth = pred_depth[pad[0] : pred_depth.shape[0] - pad[1], pad[2] : pred_depth.shape[1] - pad[3]]
     pred_depth = torch.nn.functional.interpolate(pred_depth[None, None, :, :], [rgb_origin.shape[0], rgb_origin.shape[1]], mode='bilinear').squeeze() # to original size
-    pred_depth = pred_depth * normalize_scale / scale_info
+    print(f"before pred_depth: {pred_depth.shape} and mean: {torch.mean(pred_depth)}")
+    # pred_depth = pred_depth * normalize_scale / scale_info
+    # print(f"before pred_depth: {pred_depth.shape} and mean: {torch.mean(pred_depth)}")
 
     pred_depth = (pred_depth > 0) * (pred_depth < 300) * pred_depth
     if gt_depth is not None:
@@ -327,7 +346,7 @@ def postprocess_per_image(i, pred_depth, gt_depth, intrinsic, rgb_origin, normal
     mean = torch.tensor([123.675, 116.28, 103.53]).float()[:, None, None].to(rgb_torch.device)
     std = torch.tensor([58.395, 57.12, 57.375]).float()[:, None, None].to(rgb_torch.device)
     rgb_torch = torch.div((rgb_torch - mean), std)
-
+    
     save_val_imgs(
         i,
         pred_depth,
