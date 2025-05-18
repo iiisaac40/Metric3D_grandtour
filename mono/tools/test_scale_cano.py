@@ -46,6 +46,7 @@ def parse_args():
 def main(args):
     os.chdir(CODE_SPACE)
     cfg = Config.fromfile(args.config)
+    cfg.save_csv_file = args.save_csv_file
     
     if args.options is not None:
         cfg.merge_from_dict(args.options)
